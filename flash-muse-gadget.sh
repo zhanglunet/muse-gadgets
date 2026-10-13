@@ -238,6 +238,14 @@ phy_init, data, phy,     0x19000, 0x1000,
 factory,  app,  factory, 0x20000, 0x3E0000,
 CSV
     echo "==> 已生成 devices/sdkconfig.halocode (按键 GPIO=$btn)"
+
+    local patch="$SCRIPT_DIR/halocode-button.patch"
+    if [ -f "$patch" ]; then
+        if ! grep -q "idle_btn" "$PROJ/main/button.c"; then
+            echo "==> 应用 HaloCode 按键驱动补丁..."
+            patch -d "$REPO_DIR" -p1 < "$patch" || true
+        fi
+    fi
 }
 if [ "$BOARD" = halocode ]; then setup_halocode; fi
 

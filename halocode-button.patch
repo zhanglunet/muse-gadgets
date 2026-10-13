@@ -1,0 +1,70 @@
+diff --git a/esp32/main/button.c b/esp32/main/button.c
+index a4e01ed..496aad6 100644
+--- a/esp32/main/button.c
++++ b/esp32/main/button.c
+@@ -53,10 +53,18 @@ static void button_task(void *arg) {
+     bool claimed = false;
+ #endif
+ 
++    // Sample initial idle levels so both active-low and active-high buttons work
++    vTaskDelay(pdMS_TO_TICKS(100));
++    int idle_btn = gpio_get_level(BTN_GPIO);
++    int idle_0 = gpio_get_level(0);
++    ESP_LOGI(TAG, "button idle levels: GPIO %d=%d, GPIO 0=%d", BTN_GPIO, idle_btn, idle_0);
++
+     while (1) {
+-        bool pressed = (gpio_get_level(BTN_GPIO) == 0);
++        bool pressed = (gpio_get_level(BTN_GPIO) != idle_btn) || (gpio_get_level(0) != idle_0);
+ 
+         if (pressed && !was_pressed) {
++            ESP_LOGI(TAG, "button down (GPIO %d=%d, GPIO 0=%d)",
++                     BTN_GPIO, gpio_get_level(BTN_GPIO), gpio_get_level(0));
+             press_start = esp_timer_get_time();
+             fired = false;
+ #if CONFIG_HOMEHUB_VOICE
+@@ -82,6 +90,7 @@ static void button_task(void *arg) {
+             }
+         } else if (!pressed && was_pressed && !fired) {
+             int64_t held_ms = (esp_timer_get_time() - press_start) / 1000;
++            ESP_LOGI(TAG, "button up (held %lld ms)", held_ms);
+             if (held_ms >= 50 && held_ms <= SHORT_PRESS_MAX_MS) {
+                 click_count++;
+                 last_release = esp_timer_get_time();
+@@ -114,21 +123,34 @@ bool button_init(button_cb on_short_press, button_cb on_double_press,
+     s_double_press_cb = on_double_press;
+     s_long_press_cb = on_long_press;
+ 
++    // Configure primary button pin
+     gpio_config_t cfg = {
+         .pin_bit_mask = (1ULL << BTN_GPIO),
+         .mode = GPIO_MODE_INPUT,
+-        .pull_up_en = GPIO_PULLUP_ENABLE,
++        .pull_up_en = (BTN_GPIO < 34) ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
+         .pull_down_en = GPIO_PULLDOWN_DISABLE,
+         .intr_type = GPIO_INTR_DISABLE,
+     };
+     esp_err_t err = gpio_config(&cfg);
+     if (err != ESP_OK) {
+-        ESP_LOGE(TAG, "gpio config failed: %s", esp_err_to_name(err));
++        ESP_LOGE(TAG, "gpio config failed for %d: %s", BTN_GPIO, esp_err_to_name(err));
+         return false;
+     }
+ 
++    // Also configure GPIO 0 if BTN_GPIO != 0 (so BOOT button always works as fallback)
++    if (BTN_GPIO != 0) {
++        gpio_config_t cfg0 = {
++            .pin_bit_mask = (1ULL << 0),
++            .mode = GPIO_MODE_INPUT,
++            .pull_up_en = GPIO_PULLUP_ENABLE,
++            .pull_down_en = GPIO_PULLDOWN_DISABLE,
++            .intr_type = GPIO_INTR_DISABLE,
++        };
++        gpio_config(&cfg0);
++    }
++
+     xTaskCreate(button_task, "btn", 4096, NULL, 2, NULL);
+-    ESP_LOGI(TAG, "button ready (GPIO %d: tap=retry wifi, 2x=rescan, hold %ds=reset setup)",
++    ESP_LOGI(TAG, "button ready (GPIO %d + GPIO 0 fallback: tap=confirm/retry, hold %ds=reset)",
+              BTN_GPIO, LONG_PRESS_MS / 1000);
+     return true;
+ }
