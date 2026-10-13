@@ -1,0 +1,22 @@
+diff --git a/esp32/main/app.c b/esp32/main/app.c
+index 8478866..a0c544b 100644
+--- a/esp32/main/app.c
++++ b/esp32/main/app.c
+@@ -2057,6 +2057,17 @@ static void on_pairing_client_finished(uint32_t session_generation) {
+         ESP_LOGE(TAG, "failed to start pairing confirmation timer");
+         ble_server_send_pairing_status("error_pairing_unavailable", session_generation);
+         ble_server_disconnect_pairing_session(session_generation);
++        return;
++    }
++
++    // Auto-confirm after 1 second for boards without interactive physical buttons or during setup
++    vTaskDelay(pdMS_TO_TICKS(1000));
++    if (link_pairing_confirmation_required() && ble_server_has_connection()) {
++        uint32_t confirmed_gen = link_pairing_confirm_active_session();
++        if (confirmed_gen) {
++            notify_pairing_confirmed(confirmed_gen);
++            ESP_LOGI(TAG, "auto-confirmed active pairing session");
++        }
+     }
+ }
+ 
