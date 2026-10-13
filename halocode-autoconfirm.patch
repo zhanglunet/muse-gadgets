@@ -1,8 +1,24 @@
 diff --git a/esp32/main/app.c b/esp32/main/app.c
-index 8478866..a0c544b 100644
+index 8478866..a86d894 100644
 --- a/esp32/main/app.c
 +++ b/esp32/main/app.c
-@@ -2057,6 +2057,17 @@ static void on_pairing_client_finished(uint32_t session_generation) {
+@@ -696,11 +696,10 @@ static void restart_task(void *arg) {
+     esp_restart();
+ }
+ 
+-// On boards with the full UI, display and audio leave too little internal RAM
+-// to hold BLE, Wi-Fi and a TLS handshake at once (the S3's esp-aes DMA buffers fail even
+-// with PSRAM). Pairing ends once the credentials are saved, and the device
+-// restarts to reach its VM with the BLE stack never started.
+-#define PAIR_THEN_RESTART CONFIG_MUSE_ENABLED
++// On boards with limited internal RAM (classic ESP32 without PSRAM),
++// BLE, Wi-Fi and TLS handshake cannot run concurrently.
++// Pairing completes once credentials are saved, and the device restarts cleanly.
++#define PAIR_THEN_RESTART 1
+ 
+ static char *load_token_unlocked(const char *key) {
+     char *buf = calloc(1, TOKEN_BUF_BYTES);
+@@ -2057,6 +2056,17 @@ static void on_pairing_client_finished(uint32_t session_generation) {
          ESP_LOGE(TAG, "failed to start pairing confirmation timer");
          ble_server_send_pairing_status("error_pairing_unavailable", session_generation);
          ble_server_disconnect_pairing_session(session_generation);
