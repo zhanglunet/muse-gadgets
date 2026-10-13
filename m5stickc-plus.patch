@@ -1,0 +1,207 @@
+diff --git a/esp32/main/Kconfig.projbuild b/esp32/main/Kconfig.projbuild
+index 0f0b13f..792cccb 100644
+--- a/esp32/main/Kconfig.projbuild
++++ b/esp32/main/Kconfig.projbuild
+@@ -206,6 +206,10 @@ menu "ESP32 Device SDK"
+             bool "Waveshare ESP32-C6-LCD-1.47 inch ST7789 display (status bars)"
+             depends on IDF_TARGET_ESP32C6
+ 
++        config HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
++            bool "M5StickC Plus (v1.x) 1.14 inch ST7789 display (status bars)"
++            depends on IDF_TARGET_ESP32
++
+         config HOMEHUB_LED_BACKEND_SENSECAP_ST7701
+             bool "SenseCAP Indicator 4 inch ST7701S RGB display (status bars)"
+             depends on IDF_TARGET_ESP32S3 && SPIRAM
+@@ -262,6 +266,7 @@ menu "ESP32 Device SDK"
+         bool
+         default y if HOMEHUB_LED_BACKEND_IDEASPARK_ST7789
+         default y if HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789
++        default y if HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
+         default y if HOMEHUB_LED_BACKEND_SENSECAP_ST7701
+         default y if HOMEHUB_LED_BACKEND_RETERMINAL_UC8179
+         default y if HOMEHUB_LED_BACKEND_RETERMINAL_SPECTRA6
+diff --git a/esp32/main/led_status.c b/esp32/main/led_status.c
+index 2b2d027..9d7c6fd 100644
+--- a/esp32/main/led_status.c
++++ b/esp32/main/led_status.c
+@@ -42,10 +42,14 @@
+ #include "esp_lcd_panel_ops.h"
+ #include "happy_anim.h"
+ #include "pixel_font.h"
+-#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789
++#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
+ #include "driver/spi_master.h"
+ #include "esp_lcd_panel_io.h"
+ #include "esp_lcd_panel_st7789.h"
++#if CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
++// M5StickC Plus (v1.x) drives its LCD backlight from the AXP192 PMIC over I2C.
++#include "driver/i2c_master.h"
++#endif
+ #else
+ #include "driver/i2c_master.h"
+ #include "esp_lcd_panel_rgb.h"
+@@ -124,6 +128,7 @@ static const char *TAG = "link.led";
+ #define LCD_V_RES        320
+ // The 170-column panel sits in the middle of the controller's 240 columns.
+ #define LCD_X_GAP        35
++#define LCD_Y_GAP        0
+ #define LCD_BAR_ROWS     10
+ #define LCD_ANIM_SCALE   3
+ #define LCD_DOT_MARGIN   4
+@@ -177,10 +182,32 @@ static const char *TAG = "link.led";
+ #define LCD_H_RES        172
+ #define LCD_V_RES        320
+ #define LCD_X_GAP        34
++#define LCD_Y_GAP        0
+ #define LCD_BAR_ROWS     10
+ #define LCD_ANIM_SCALE   2
+ #define LCD_DOT_MARGIN   4
+ #define LCD_BUF_CAPS     MALLOC_CAP_DMA
++#elif CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
++// M5StickC Plus (v1.x): 135x240 ST7789 IPS panel on SPI. Pins and panel
++// offsets follow M5GFX's Panel_M5StickCPlus; the backlight is AXP192 LDO2,
++// switched over I2C (no BL GPIO on this board).
++#define LCD_NAME         "M5StickC Plus ST7789"
++#define LCD_HOST         SPI2_HOST
++#define LCD_PIN_SCLK     13
++#define LCD_PIN_MOSI     15
++#define LCD_PIN_CS       5
++#define LCD_PIN_DC       23
++#define LCD_PIN_RST      18
++#define LCD_PCLK_HZ      (40 * 1000 * 1000)
++#define LCD_H_RES        135
++#define LCD_V_RES        240
++#define LCD_X_GAP        52
++#define LCD_Y_GAP        40
++#define LCD_BAR_ROWS     8
++#define LCD_ANIM_SCALE   2
++#define LCD_DOT_MARGIN   4
++// Draw buffers are sent by SPI DMA.
++#define LCD_BUF_CAPS     MALLOC_CAP_DMA
+ #endif
+ 
+ #if CONFIG_HOMEHUB_DISPLAY
+@@ -404,7 +431,7 @@ static bool s_dot_drawn = false;
+ static bool s_image_mode = false;
+ static const uint8_t s_dot_rows[LCD_DOT_CELLS] = {0x6, 0xf, 0xf, 0x6};
+ 
+-#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789
++#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
+ static SemaphoreHandle_t s_draw_done = NULL;
+ 
+ static bool lcd_draw_done(esp_lcd_panel_io_handle_t io,
+@@ -617,7 +644,7 @@ static void anim_task(void *arg) {
+     }
+ }
+ 
+-#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789
++#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
+ static esp_err_t lcd_panel_init(void) {
+     s_draw_done = xSemaphoreCreateBinary();
+     if (!s_draw_done) return ESP_ERR_NO_MEM;
+@@ -653,7 +680,7 @@ static esp_err_t lcd_panel_init(void) {
+     if (err == ESP_OK) err = esp_lcd_panel_reset(s_panel);
+     if (err == ESP_OK) err = esp_lcd_panel_init(s_panel);
+     if (err == ESP_OK) err = esp_lcd_panel_invert_color(s_panel, true);
+-    if (err == ESP_OK) err = esp_lcd_panel_set_gap(s_panel, LCD_X_GAP, 0);
++    if (err == ESP_OK) err = esp_lcd_panel_set_gap(s_panel, LCD_X_GAP, LCD_Y_GAP);
+     return err;
+ }
+ 
+@@ -838,6 +865,54 @@ static esp_err_t lcd_panel_on(void) {
+ }
+ #endif
+ 
++#if CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
++// M5StickC Plus (v1.x): the LCD backlight is AXP192 LDO2, enabled over I2C.
++// Mirrors M5GFX's Light_M5StickC: turn LDO2 on (register 0x12, bit 2) and set
++// its voltage to 3.3V (register 0x28, high nibble). Register 0x12 is
++// read-modify-written so the other rails keep whatever state they booted with.
++#define AXP192_I2C_ADDR  0x34
++#define AXP192_I2C_PORT  I2C_NUM_1
++#define AXP192_I2C_SDA   21
++#define AXP192_I2C_SCL   22
++static bool axp192_backlight_on(void) {
++    i2c_master_bus_config_t bus_cfg = {
++        .i2c_port = AXP192_I2C_PORT,
++        .sda_io_num = AXP192_I2C_SDA,
++        .scl_io_num = AXP192_I2C_SCL,
++        .clk_source = I2C_CLK_SRC_DEFAULT,
++        .glitch_ignore_cnt = 7,
++        .flags.enable_internal_pullup = true,
++    };
++    i2c_master_bus_handle_t bus = NULL;
++    i2c_master_dev_handle_t dev = NULL;
++    bool ok = i2c_new_master_bus(&bus_cfg, &bus) == ESP_OK;
++    if (ok) {
++        i2c_device_config_t dev_cfg = {
++            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
++            .device_address = AXP192_I2C_ADDR,
++            .scl_speed_hz = 400000,
++        };
++        ok = i2c_master_bus_add_device(bus, &dev_cfg, &dev) == ESP_OK;
++    }
++    if (ok) {
++        uint8_t reg = 0;
++        uint8_t reg_addr = 0x12;
++        ok = i2c_master_transmit_receive(dev, &reg_addr, 1, &reg, 1, 100) == ESP_OK;
++        if (ok) {
++            uint8_t w[2] = {0x12, (uint8_t)(reg | (1 << 2))};
++            ok = i2c_master_transmit(dev, w, sizeof(w), 100) == ESP_OK;
++        }
++    }
++    if (ok) {
++        uint8_t w[2] = {0x28, 0xF0};
++        ok = i2c_master_transmit(dev, w, sizeof(w), 100) == ESP_OK;
++    }
++    if (dev) i2c_master_bus_rm_device(dev);
++    if (bus) i2c_del_master_bus(bus);
++    return ok;
++}
++#endif
++
+ static bool led_hw_init(void) {
+     s_bar_buf = heap_caps_malloc(LCD_H_RES * LCD_BAR_ROWS * sizeof(uint16_t), LCD_BUF_CAPS);
+     s_anim_buf = heap_caps_malloc(LCD_ANIM_BUF_PIXELS * sizeof(uint16_t), LCD_BUF_CAPS);
+@@ -857,18 +932,31 @@ static bool led_hw_init(void) {
+         return false;
+     }
+ 
++#if CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
++    // No BL GPIO on this board: the backlight is AXP192 LDO2 (see above).
++    if (!axp192_backlight_on()) {
++        ESP_LOGE(TAG, "AXP192 backlight init failed");
++        return false;
++    }
++#else
+     gpio_config_t bl_cfg = {
+         .pin_bit_mask = 1ULL << LCD_PIN_BL,
+         .mode = GPIO_MODE_OUTPUT,
+     };
+     gpio_config(&bl_cfg);
+     gpio_set_level(LCD_PIN_BL, 1);
++#endif
+ 
+     // Lower priority than the LED task so status changes are never delayed.
+     xTaskCreate(anim_task, "lcd_anim", 2560, NULL, 1, NULL);
+ 
++#if CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
++    ESP_LOGI(TAG, "LED status ready: " LCD_NAME " %dx%d display (BL=AXP192 LDO2)",
++             LCD_H_RES, LCD_V_RES);
++#else
+     ESP_LOGI(TAG, "LED status ready: " LCD_NAME " %dx%d display (BL=%d)",
+              LCD_H_RES, LCD_V_RES, LCD_PIN_BL);
++#endif
+     return true;
+ }
+ #elif CONFIG_HOMEHUB_LED_BACKEND_MUSE
+@@ -1216,7 +1304,7 @@ static bool lcd_draw_image_rect(int x, int y, int w, int h, const void *pixels)
+         s_image_mode = true;
+         lcd_clear_rows(0, LCD_V_RES);
+     }
+-#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789
++#if CONFIG_HOMEHUB_LED_BACKEND_IDEASPARK_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_WAVESHARE_C6_ST7789 || CONFIG_HOMEHUB_LED_BACKEND_M5STICKC_PLUS_ST7789
+     // Already in the panel's format; copied only to reach DMA memory.
+     memcpy(s_anim_buf, pixels, (size_t)w * h * sizeof(uint16_t));
+ #else

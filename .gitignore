@@ -1,0 +1,28 @@
+# Build artifacts
+**/build/
+build/
+*.bin
+*.elf
+*.map
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+*.csv.bak
+
+# OS & Editor
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Sensitive data
+*token*
+*.pem
+*.key
+
+# Legacy workspaces and archives
+muse-gadgets/
+muse-gadgets-halocode/
+*.zip
+
