@@ -12,7 +12,7 @@
 | **Flash** | 4 MB SPI Flash (DIO 模式, 80MHz) | 分区布局：单 App 槽无 OTA |
 | **PSRAM** | 无板载 PSRAM | 控制通道可用，禁用本地内网隧道 |
 | **USB 转串口** | WCH CH340 (`/dev/cu.usbserial-120`) | 波特率 115200 / 460800 |
-| **按键** | 单个中央物理按键（多功能键） | Active-Low，连接 **GPIO 0**（兼作 BOOT） |
+| **按键** | 单个中央物理按键（多功能键） | Active-Low，连接 **GPIO 35**（板载 PCB 硬件上拉） |
 | **板载灯环** | **12 颗独立 RGB LED** | **非 WS2812**，由 ISSI **IS31FL3731** I2C 矩阵芯片驱动 |
 | **I2C 总线** | **SDA = GPIO 19**, **SCL = GPIO 18** | 400kHz Fast Mode |
 | **板载传感器** | 6 轴加速度计/陀螺仪 (LSM6DS3 @ `0x69`) | 磁力计/外设 (`0x10`) |
@@ -87,5 +87,5 @@ factory,  app,  factory, 0x20000, 0x3E0000,
 ```
 
 ### 3.4 状态指示灯与按键
-- 按键配置：`CONFIG_HOMEHUB_BUTTON_GPIO=0`
+- 按键配置：`CONFIG_HOMEHUB_BUTTON_GPIO=35`
 - 状态后端：`CONFIG_HOMEHUB_LED_BACKEND_NONE=y`（或调用 IS31FL I2C 接口驱动）

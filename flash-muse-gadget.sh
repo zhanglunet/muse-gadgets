@@ -110,9 +110,9 @@ case "$BOARD" in
     *) echo "不支持的板子: $BOARD" >&2; usage 2 ;;
 esac
 
-# HaloCode 配置: 默认按键为 GPIO 0 (BOOT 键)
+# HaloCode 配置: 默认按键为 GPIO 35 (板载中间按键)
 if [ "$BOARD" = halocode ]; then
-    HALOCODE_BUTTON_GPIO="${HALOCODE_BUTTON_GPIO:-0}"
+    HALOCODE_BUTTON_GPIO="${HALOCODE_BUTTON_GPIO:-35}"
 fi
 
 
@@ -180,7 +180,7 @@ echo "==> 源码: $PROJ"
 
 # ---- HaloCode 社区移植: 生成 overlay + 4MB 分区表 ----
 setup_halocode() {
-    local btn="${HALOCODE_BUTTON_GPIO:-0}"
+    local btn="${HALOCODE_BUTTON_GPIO:-35}"
     cat > "$PROJ/devices/sdkconfig.halocode" <<TEMPLATE
 # Makeblock HaloCode — community port.
 # Classic ESP32, 4 MB flash, programmable button.
